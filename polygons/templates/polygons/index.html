@@ -1,0 +1,102 @@
+{% load staticfiles %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>PolyMap</title>
+    <!-- leaflet, bootstrap, custom-css -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css" integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA==" crossorigin=""/>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <link href="{% static 'css/map.css' %}" rel="stylesheet">
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <div class="top-menu">
+        Take union and intersection of geojson polygons
+        <input type="file" name="myfile" id='myfile' class="form-control-file mt-2 mb-2">
+        <button id='btn-upload' class='btn'>Upload</button>
+      <button id="btn-save" class='btn'>Save geojson</button>
+    </div>
+
+    <div class="popup-menu">
+      <button id="btn-union" class='btn'>Union</button>
+      <button id="btn-intersect" class='btn'>Intersect</button>
+    </div>
+    <!-- jquery, leaflet, popper, bootstrap, bootbox, inline-js, external-js -->
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js" integrity="sha512-nMMmRyTVoLYqjP9hrbed9S+FzjZHW5gY1TWCHA5ckwXZBadntCNs8kEqAWdrb9O7rxbCaA4lKTIWjDXZxflOcA==" crossorigin=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootbox.js/4.4.0/bootbox.min.js"></script>
+    <script>
+    // This js code is inline because it needs to access django variables
+
+      // Making hashmap with polygon id as key and polygon grids as value
+      var storedGrids = {};
+      {% for polygon in polygons %}
+        storedGrids[{{ polygon.id | safe }}] = {{ polygon.getGrids | safe }}
+      {% endfor  %}
+
+      // RESTful functions
+
+      // SAVE POLYGONS TO GEOJSON
+      $('#btn-save').click(function() {
+        let request = new XMLHttpRequest();
+        request.open('GET', "{% url 'save' %}", true);
+        // Need custom header to allow file download
+        request.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+        request.responseType = 'blob';
+        request.onload = function() {
+          if(request.status === 200) {
+            // Making blob object from response and adding link to it
+            let blob = new Blob([request.response], { type: 'application/geojson' });
+            let link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = 'polygons.geojson';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        };
+        request.send();
+      });
+
+      // UPLOAD GEOJSON FILE
+      $('#btn-upload').click(function() {
+        let file = $("#myfile")[0].files[0];
+        // Make post data and add header tokens
+        let formData = new FormData();
+        formData.append('file', file);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        let request = new XMLHttpRequest();
+        request.open("POST", "{% url 'upload' %}");
+
+        request.onload = function(resp_str) {
+          let response = JSON.parse(resp_str.target.response);
+          (response['code'] === 200) ? location.reload() : alert(response['text']);
+        };
+        request.send(formData);
+      });
+
+      // UNION OPERATION
+      $('#btn-union').click(function() {
+        // Trick for passing js variables to django view
+        $.getJSON("{% url 'union' 0 %}".replace(/0/, selectedPolygons.join(',').toString()), function(response){
+          (response['code'] === 200) ? location.reload() : alert(response['text']);
+        });
+      });
+
+      // INTERSECT OPERATION
+      $('#btn-intersect').click(function() {
+        $.getJSON("{% url 'intersect' 0 %}".replace(/0/, selectedPolygons.join(',').toString()), function(response){
+          (response['code'] === 200) ? location.reload() : alert(response['text']);
+        });
+      });
+   </script>
+   <script src="{% static 'js/map.js' %}"></script>
+
+  </body>
+</html>

@@ -1,0 +1,4 @@
+django==2.0.4
+django-import-export==1.0.1
+geojson==2.4.0
+shapely==1.6.4.post2
